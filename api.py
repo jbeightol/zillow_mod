@@ -137,12 +137,10 @@ class ValuationApi(object):
     def GetUpdatedPropertyDetails(self, zws_id, zpid):
         """
         The GetUpdatedPropertyDetails API finds a property for a specified address.
-        The result set returned contains the full address(s), zpid and Zestimate data that is provided by the GetSearchResults API.
+        The result set returned contains the full address(s), zpid and Zestimate data that is provided by the GetUpdatedPropertyDetails API.
         Moreover, this API call also gives rich property data like lot size, year built, bath/beds, last sale details etc.
         :zws_id: The Zillow Web Service Identifier.
-        :param address: The address of the property to search. This string should be URL encoded.
-        :param citystatezip: The city+state combination and/or ZIP code for which to search.
-        :param retnzestimate: Return Rent Zestimate information if available (boolean true/false, default: false)
+        :param zpid: the zillow property id
         :return:
 
         Example:
@@ -165,6 +163,56 @@ class ValuationApi(object):
             raise ZillowError({'message': "Zillow did not return a valid response: %s" % data})
 
         return place
+
+    def GetSchoolsFromAddress(self, zws_id, address, citystatezip, retnzestimate=False):
+        """
+        The GetDeepSearchResults API finds a property for a specified address.
+        The result set returned contains the full address(s), zpid and Zestimate data that is provided by the GetSearchResults API.
+        Moreover, this API call also gives rich property data like lot size, year built, bath/beds, last sale details etc.
+        :zws_id: The Zillow Web Service Identifier.
+        :param address: The address of the property to search. This string should be URL encoded.
+        :param citystatezip: The city+state combination and/or ZIP code for which to search.
+        :param retnzestimate: Return Rent Zestimate information if available (boolean true/false, default: false)
+        :return:
+
+        Example:
+        """
+        url = '%s/GetDeepSearchResults.htm' % (self.base_url)
+        parameters = {'zws-id': zws_id,
+                      'address': address,
+                      'citystatezip': citystatezip
+                      }
+
+        if retnzestimate:
+            parameters['retnzestimate'] = 'true'
+
+        resp = self._RequestUrl(url, 'GET', data=parameters)
+        data = resp.content.decode('utf-8')
+
+        xmltodict_data = xmltodict.parse(data)
+
+        place = Place(has_extended_data=True)
+        try:
+            place.set_data(xmltodict_data.get('SearchResults:searchresults', None)['response']['results']['result'])
+        except:
+            raise ZillowError({'message': "Zillow did not return a valid response: %s" % data})
+
+        zip_id = place.zpid
+
+        parameters2 = {'zws-id': zws_id,'zpid': zip_id}
+        url2 = '%s/GetUpdatedPropertyDetails.htm' % (self.base_url)
+
+        resp2 = self._RequestUrl(url2, 'GET', data=parameters2)
+        data2 = resp2.content.decode('utf-8')
+
+        xmltodict_data2 = xmltodict.parse(data2)
+        place.school_district = xmltodict_data2.get('UpdatedPropertyDetails:updatedPropertyDetails')['response'].get('schoolDistrict')
+        place.elementary_school = xmltodict_data2.get('UpdatedPropertyDetails:updatedPropertyDetails')['response'].get('elementarySchool')
+        place.middle_school = xmltodict_data2.get('UpdatedPropertyDetails:updatedPropertyDetails')['response'].get('middleSchool')
+        place.high_school = xmltodict_data2.get('UpdatedPropertyDetails:updatedPropertyDetails')['response'].get('highSchool')
+
+        return place
+
 
     def GetDeepComps(self, zws_id, zpid, count=10, rentzestimate=False):
         """
